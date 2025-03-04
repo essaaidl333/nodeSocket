@@ -146,6 +146,7 @@ io.on("connection", (socket) => {
   });
 
 // الاستماع على المنفذ 3001
-httpServer.listen(3001, () => {
-  console.log("WebSocket Server is running on port 3001");
+const PORT = process.env.PORT || 3001;
+httpServer.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
 });
