@@ -14,63 +14,64 @@ const io = new Server(httpServer, {
 const users = new Map();
 
 // Socket.IO logic
-io.on("connection", (socket) => {
-  console.log("User connected:", socket.id);
+// io.on("connection", (socket) => {
+//   console.log("User connected:", socket.id);
 
-  // تسجيل اسم المستخدم عند الاتصال
-  socket.on("register", (username) => {
-    socket.username = username;
-    users.set(username, socket.id); // تخزين الاسم و socket.id
-    console.log(`User registered: ${username} - ${socket.id}`);
-  });
+//   // تسجيل اسم المستخدم عند الاتصال
+//   socket.on("register", (username) => {
+//     socket.username = username;
+//     users.set(username, socket.id); // تخزين الاسم و socket.id
+//     console.log(`User registered: ${username} - ${socket.id}`);
+//   });
 
-  // استقبال العرض وإرساله إلى مستخدم معين
-  socket.on("offer", ({ targetUser, offer }) => {
-    const targetSocketId = users.get(targetUser);
-    if (targetSocketId) {
-      io.to(targetSocketId).emit("offer", { offer, sender: socket.username });
-    } else {
-      console.error(`User ${targetUser} not found.`);
-    }
-  });
+//   // استقبال العرض وإرساله إلى مستخدم معين
+//   socket.on("offer", ({ targetUser, offer }) => {
+//     const targetSocketId = users.get(targetUser);
+//     if (targetSocketId) {
+//       io.to(targetSocketId).emit("offer", { offer, sender: socket.username });
+//     } else {
+//       console.error(`User ${targetUser} not found.`);
+//     }
+//   });
 
-  // استقبال الإجابة وإرسالها
-  socket.on("answer", ({ targetUser, answer }) => {
-    const targetSocketId = users.get(targetUser);
-    if (targetSocketId) {
-      io.to(targetSocketId).emit("answer", answer);
-    } else {
-      console.error(`User ${targetUser} not found.`);
-    }
-  });
+//   // استقبال الإجابة وإرسالها
+//   socket.on("answer", ({ targetUser, answer }) => {
+//     const targetSocketId = users.get(targetUser);
+//     if (targetSocketId) {
+//       io.to(targetSocketId).emit("answer", answer);
+//     } else {
+//       console.error(`User ${targetUser} not found.`);
+//     }
+//   });
 
-  // استقبال مرشح ICE وإرساله
-  socket.on("ice-candidate", ({ targetUser, candidate }) => {
-    const targetSocketId = users.get(targetUser);
-    if (targetSocketId) {
-      io.to(targetSocketId).emit("ice-candidate", candidate);
-    } else {
-      console.error(`User ${targetUser} not found.`);
-    }
-  });
+//   // استقبال مرشح ICE وإرساله
+//   socket.on("ice-candidate", ({ targetUser, candidate }) => {
+//     const targetSocketId = users.get(targetUser);
+//     if (targetSocketId) {
+//       io.to(targetSocketId).emit("ice-candidate", candidate);
+//     } else {
+//       console.error(`User ${targetUser} not found.`);
+//     }
+//   });
 
-  // إرسال بيانات عامة (مثل الرسائل النصية)
-  socket.on("send", (data) => {
-    socket.broadcast.emit("send", data); // إرسال البيانات للجميع باستثناء المرسل
-  });
+//   // إرسال بيانات عامة (مثل الرسائل النصية)
+//   socket.on("send", (data) => {
+//     socket.broadcast.emit("send", data); // إرسال البيانات للجميع باستثناء المرسل
+//   });
 
-  // التعامل مع فصل الاتصال
-  socket.on("disconnect", () => {
-    // حذف المستخدم من الخريطة عند قطع الاتصال
-    for (let [username, id] of users.entries()) {
-      if (id === socket.id) {
-        users.delete(username);
-        console.log(`User ${username} disconnected`);
-        break;
-      }
-    }
-  });
-}); io.on("connection", (socket) => {
+//   // التعامل مع فصل الاتصال
+//   socket.on("disconnect", () => {
+//     // حذف المستخدم من الخريطة عند قطع الاتصال
+//     for (let [username, id] of users.entries()) {
+//       if (id === socket.id) {
+//         users.delete(username);
+//         console.log(`User ${username} disconnected`);
+//         break;
+//       }
+//     }
+//   });
+// });
+ io.on("connection", (socket) => {
     console.log("User connected:", socket.id);
   
     // تسجيل اسم المستخدم عند الاتصال
