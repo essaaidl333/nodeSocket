@@ -1,32 +1,32 @@
-// استيراد المكتبات اللازمة
 const express = require("express");
 const http = require("http");
 const WebSocket = require("ws");
+const { v4: uuidv4 } = require("uuid"); // استيراد مكتبة uuid
 
-// إنشاء تطبيق Express
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-// تحديد المنفذ
 const PORT = process.env.PORT || 3000;
 
-// المسار الرئيسي
 app.get("/", (req, res) => {
     res.send("مرحبا بك في تطبيق WebSocket على Render!");
 });
 
-// التعامل مع اتصالات WebSocket
 const users = new Map();
 
 wss.on("connection", (socket) => {
-    console.log("User connected:", socket.id);
+    const connectionId = uuidv4(); // إنشاء معرف فريد
+    console.log("User connected:", connectionId);
+
+    // تعيين المعرف للـ socket
+    socket.id = connectionId;
 
     // تسجيل اسم المستخدم عند الاتصال
     socket.on("register", (username) => {
         socket.username = username;
         users.set(username, socket);
-        console.log(`User registered: ${username}`);
+        console.log(`User registered: ${username} - ${socket.id}`);
     });
 
     // استقبال طلب الاتصال وإرساله إلى المستخدم الهدف
@@ -90,7 +90,7 @@ wss.on("connection", (socket) => {
     });
 
     // التعامل مع فصل الاتصال
-    socket.on("disconnect", () => {
+    socket.on("close", () => {
         for (let [username, userSocket] of users.entries()) {
             if (userSocket === socket) {
                 users.delete(username);
@@ -101,7 +101,6 @@ wss.on("connection", (socket) => {
     });
 });
 
-// تشغيل السيرفر
 server.listen(PORT, () => {
     console.log(`الخادم يعمل على المنفذ ${PORT}`);
 });
