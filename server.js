@@ -1,123 +1,152 @@
-const express = require("express");
 const http = require("http");
-const WebSocket = require("ws");
-const { v4: uuidv4 } = require("uuid"); // استيراد مكتبة uuid
+const { Server } = require("socket.io");
 
-const app = express();
-const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
+// إنشاء خادم HTTP
+const httpServer = http.createServer();
+const io = new Server(httpServer, {
+  cors: {
+    origin: "*", // السماح لجميع المصادر
+    methods: ["GET", "POST"], // السماح بطرق GET و POST
+  },
+});
 
-const PORT = process.env.PORT || 3001; // تغيير المنفذ إلى 3001
-
-// تخزين المستخدمين المتصلين
+// خريطة لحفظ أسماء المستخدمين ومعرفات socket
 const users = new Map();
 
-app.get("/", (req, res) => {
-    res.send("مرحبا بك في تطبيق WebSocket على Render!");
-});
+// Socket.IO logic
+io.on("connection", (socket) => {
+  console.log("User connected:", socket.id);
 
-// معالجة اتصالات WebSocket
-wss.on("connection",  function connection(socket)  {
-    // const connectionId = uuidv4(); // إنشاء معرف فريد
-    // console.log("User connected:", socket);
+  // تسجيل اسم المستخدم عند الاتصال
+  socket.on("register", (username) => {
+    socket.username = username;
+    users.set(username, socket.id); // تخزين الاسم و socket.id
+    console.log(`User registered: ${username} - ${socket.id}`);
+  });
 
-    // تعيين المعرف للـ socket
-    // socket.id = connectionId;
+  // استقبال العرض وإرساله إلى مستخدم معين
+  socket.on("offer", ({ targetUser, offer }) => {
+    const targetSocketId = users.get(targetUser);
+    if (targetSocketId) {
+      io.to(targetSocketId).emit("offer", { offer, sender: socket.username });
+    } else {
+      console.error(`User ${targetUser} not found.`);
+    }
+  });
 
-    // استقبال الرسائل من العميل
-    socket.on("message", (message) => {
-        try {
-            const data = JSON.parse(message); // تحويل الرسالة إلى JSON
-            console.log("Received message:", data);
+  // استقبال الإجابة وإرسالها
+  socket.on("answer", ({ targetUser, answer }) => {
+    const targetSocketId = users.get(targetUser);
+    if (targetSocketId) {
+      io.to(targetSocketId).emit("answer", answer);
+    } else {
+      console.error(`User ${targetUser} not found.`);
+    }
+  });
 
-            switch (data.type) {
-                case "register": // تسجيل المستخدم
-                    const username = data.username_get;
-                    if (username) {
-                        socket.username = data.username_get;
-                         users.set(username, socket);
-                        console.log(`User registered: ${username} - ${socket.id}`);
-                    }
-                    break;
+  // استقبال مرشح ICE وإرساله
+  socket.on("ice-candidate", ({ targetUser, candidate }) => {
+    const targetSocketId = users.get(targetUser);
+    if (targetSocketId) {
+      io.to(targetSocketId).emit("ice-candidate", candidate);
+    } else {
+      console.error(`User ${targetUser} not found.`);
+    }
+  });
 
-                case "call-user": // طلب الاتصال
-                    const { targetUser, offer ,username_get} = data;
-                    const use =data.username;
-                    const targetSocket = users.get(targetUser);
-                    const mySocket = users.get(use);
-                    console.log(mySocket);
-                    if (targetSocket) {
-                        console.log(`Sending offer to ${targetUser}`);
-                        targetSocket.send(JSON.stringify({ type: "incoming-call", offer, caller: socket.username }));
-                    } else {
-                        console.error(`User ${targetUser} not found.`);
-                        if (mySocket) {
-                            mySocket.send(JSON.stringify({ type: "not-found", targetUser }));
-                        }
-                    }
-                    break;
+  // إرسال بيانات عامة (مثل الرسائل النصية)
+  socket.on("send", (data) => {
+    socket.broadcast.emit("send", data); // إرسال البيانات للجميع باستثناء المرسل
+  });
 
-                case "call-response": // رد على طلب الاتصال
-                    const { caller, response, answer } = data;
-                    const callerSocket = users.get(caller);
-
-                    if (callerSocket) {
-                        if (response === "accepted") {
-                            console.log(`Call accepted by ${caller}, sending answer to ${caller}`);
-                            callerSocket.send(JSON.stringify({ type: "call-accepted", answer }));
-                        } else {
-                            console.log(`Call rejected by ${caller}`);
-                            callerSocket.send(JSON.stringify({ type: "call-rejected" }));
-                        }
-                    } else {
-                        console.error(`User ${caller} not found.`);
-                    }
-                    break;
-
-                case "ice-candidate": // إرسال مرشح ICE
-                    const { targetUser: iceTargetUser, candidate } = data;
-                    const iceTargetSocket = users.get(iceTargetUser);
-
-                    if (iceTargetSocket) {
-                        iceTargetSocket.send(JSON.stringify({ type: "ice-candidate", candidate }));
-                    } else {
-                        console.error(`User ${iceTargetUser} not found.`);
-                    }
-                    break;
-
-                case "end-call": // إنهاء المكالمة
-                    const { targetUser: endCallTargetUser } = data;
-                    const endCallTargetSocket = users.get(endCallTargetUser);
-
-                    if (endCallTargetSocket) {
-                        console.log(`Sending end-call to ${endCallTargetUser}`);
-                        endCallTargetSocket.send(JSON.stringify({ type: "end-call" }));
-                    } else {
-                        console.error(`User ${endCallTargetUser} not found.`);
-                    }
-                    break;
-
-                default:
-                    console.log("Unknown event type:", data.event);
-            }
-        } catch (error) {
-            console.error("Error parsing message:", error);
-        }
+  // التعامل مع فصل الاتصال
+  socket.on("disconnect", () => {
+    // حذف المستخدم من الخريطة عند قطع الاتصال
+    for (let [username, id] of users.entries()) {
+      if (id === socket.id) {
+        users.delete(username);
+        console.log(`User ${username} disconnected`);
+        break;
+      }
+    }
+  });
+}); io.on("connection", (socket) => {
+    console.log("User connected:", socket.id);
+  
+    // تسجيل اسم المستخدم عند الاتصال
+    socket.on("register", (username) => {
+      socket.username = username;
+      users.set(username, socket.id); // تخزين الاسم و socket.id
+      console.log(`User registered: ${username} - ${socket.id}`);
     });
-
+  
+    // استقبال طلب الاتصال وإرساله إلى المستخدم الهدف
+    socket.on("call-user", ({ targetUser, offer, username_get }) => {
+      const targetSocketId = users.get(targetUser);
+      const mySocketId = users.get(username_get);
+      if (targetSocketId) {
+        console.log(`Sending offer to ${targetUser} (${targetSocketId})`);
+        io.to(targetSocketId).emit("incoming-call", { offer, caller: socket.username });
+      } else {
+        // console.error(`User ${username_get} not found.`);
+        io.to(mySocketId).emit("not-found",{targetUser});
+      }
+    });
+  
+    // استقبال رد المستخدم الهدف (قبول أو رفض)
+    socket.on("call-response", ({ caller, response, answer }) => {
+      const callerSocketId = users.get(caller);
+      if (callerSocketId) {
+        if (response === "accepted") {
+          console.log(`Call accepted by ${caller}, sending answer to ${callerSocketId}`);
+          io.to(callerSocketId).emit("call-accepted", { answer });
+        } else {
+          console.log(`Call rejected by ${caller}`);
+          io.to(callerSocketId).emit("call-rejected");
+        }
+      } else {
+        console.error(`User ${caller} not found.`);
+      }
+    });
+  
+    // استقبال مرشح ICE وإرساله
+    socket.on("ice-candidate", ({ targetUser, candidate }) => {
+      const targetSocketId = users.get(targetUser);
+      if (targetSocketId) {
+        io.to(targetSocketId).emit("ice-candidate", candidate);
+      } else {
+        console.error(`User ${targetUser} not found.`);
+      }
+    });
+  
+    //استقبال انهاء المكالمة 
+    socket.on("end-call", ({ targetUser }) => {
+      const targetSocketId = users.get(targetUser);
+      // const mySocketId = users.get(username_get);
+      if (targetSocketId) {
+        console.log(`Sending offer to ${targetUser} (${targetSocketId})`);
+        io.to(targetSocketId).emit("end-call");
+      } else {
+        console.error(`User ${targetUser}  not found.`);
+        
+      }
+    });
+  
     // التعامل مع فصل الاتصال
-    socket.on("close", () => {
-        for (let [username, userSocket] of users.entries()) {
-            if (userSocket === socket) {
-                users.delete(username);
-                console.log(`User ${username} disconnected`);
-                break;
-            }
+    socket.on("disconnect", () => {
+      // حذف المستخدم من الخريطة عند قطع الاتصال
+      for (let [username, id] of users.entries()) {
+        if (id === socket.id) {
+          users.delete(username);
+          console.log(`User ${username} disconnected`);
+          break;
         }
+      }
     });
-});
+  });
 
-// بدء تشغيل الخادم
-server.listen(PORT, () => {
-    console.log(`الخادم يعمل على المنفذ ${PORT}`);
+// الاستماع على المنفذ 3001
+const PORT = process.env.PORT || 3001;
+httpServer.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
 });
