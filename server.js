@@ -119,6 +119,12 @@ const users = new Map();
         console.error(`User ${targetUser} not found.`);
       }
     });
+    socket.on("video-toggle", ({ targetUser, videoEnabled }) => {
+      // إرسال الإشارة إلى المستخدم المستهدف
+      const targetSocketId = users.get(targetUser);
+      io.to(targetSocketId).emit("video-toggle", { videoEnabled });
+      console.log('vjs')
+    });
   
     //استقبال انهاء المكالمة 
     socket.on("end-call", ({ targetUser }) => {
